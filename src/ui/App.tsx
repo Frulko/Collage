@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import CropEditor from './CropEditor'
+import Welcome from './Welcome'
 import { orderPhotos, type BatchOptions, type BatchPage, type PhotoOrder } from '../engine/batch'
 import type { PhotoInput, PlacedPhoto } from '../engine/types'
 import { fitPhoto, mulberry32, solveLayout } from '../engine/solver'
@@ -60,6 +61,10 @@ export default function App() {
   const [drag, setDrag] = useState(false)
   const [project, setProject] = useState('')
   const [showSettings, setShowSettings] = useState(true)
+  const [demo, setDemo] = useState(false) // mode démo : photos embarquées, rien n'est sauvegardé
+  const [welcome, setWelcome] = useState(true)
+  const [autoGen, setAutoGen] = useState(false)
+  const pendingName = useRef('')
   const [multi, setMulti] = useState<string[]>([]) // sélection multiple dans la pellicule (⌘/Maj-clic)
   const [overPage, setOverPage] = useState<number | null>(null)
   const lastClick = useRef<string | null>(null)
@@ -84,9 +89,9 @@ export default function App() {
     kvGet<any>('dir').then(h => h && setResume(h))
   }, [])
 
-  async function ingest({ files, handle }: Picked) {
+  async function ingest({ files, handle }: Picked, opts: { demo?: boolean } = {}) {
     setBusy('Lecture des photos…'); setSel(null); setStripSel(null)
-    const saved = await kvGet<Saved>('state')
+    const saved = opts.demo ? undefined : await kvGet<Saved>('state') // la démo ne lit ni n'écrase jamais la vraie session
     const { photos: ph, failed } = await loadPhotos(files, (d, t) => setBusy(`Lecture ${d}/${t}…`))
     photos.forEach(p => p.thumb.close())
     const ids = new Set(ph.map(p => p.id))
@@ -95,7 +100,7 @@ export default function App() {
     const keepEx = (e: Iterable<string>) => new Set([...e].filter(i => ids.has(i)))
     let restored = keepPages(saved?.pages ?? []), restoredEx = keepEx(saved?.excluded ?? [])
     // historique sauvegardé : on le reprend (snapshots nettoyés des photos introuvables) ; l'état courant = l'étape où on s'était arrêté
-    const sh = await kvGet<{ tl: Snap[]; idx: number }>('history')
+    const sh = opts.demo ? undefined : await kvGet<{ tl: Snap[]; idx: number }>('history')
     if (sh?.tl?.[sh.idx]) {
       const tl = sh.tl.map(x => ({ label: x.label, pages: keepPages(x.pages), excluded: keepEx(x.excluded) }))
       hist.current.tl = tl; hist.current.idx = sh.idx; hist.current.mode = 'restore'
@@ -106,10 +111,31 @@ export default function App() {
       nextId.current = Math.max(nextId.current, ...restored.map(p => p.id + 1))
     }
     setPhotos(ph); setPages(restored); setExcluded(restoredEx); setBusy('')
-    if (saved?.project) setProject(saved.project); else if (handle?.name) setProject(handle.name)
-    if (handle) { kvSet('dir', handle); setResume(handle) }
+    setDemo(!!opts.demo)
+    if (opts.demo) setProject('Démo')
+    else if (pendingName.current) { setProject(pendingName.current); pendingName.current = '' }
+    else if (saved?.project) setProject(saved.project); else if (handle?.name) setProject(handle.name)
+    if (handle && !opts.demo) { kvSet('dir', handle); setResume(handle) }
     navigator.storage?.persist?.() // demande au navigateur de ne pas purger la session
-    setMsg(`${ph.length} photos chargées` + (restored.length ? ` · session restaurée (${restored.length} collages)` : '') + (failed.length ? ` · ${failed.length} illisibles (${failed.slice(0, 3).join(', ')}…)` : ''))
+    setMsg(opts.demo ? `Démo : ${ph.length} photos Unsplash chargées` : `${ph.length} photos chargées` + (restored.length ? ` · session restaurée (${restored.length} collages)` : '') + (failed.length ? ` · ${failed.length} illisibles (${failed.slice(0, 3).join(', ')}…)` : ''))
+  }
+  /** Démo : les 30 photos Unsplash embarquées dans le site (public/demo), puis génération automatique */
+  async function loadDemo() {
+    setWelcome(false); setBusy('Chargement de la démo…')
+    const man: { file: string }[] = await (await fetch('./demo/manifest.json')).json()
+    const files = await Promise.all(man.map(async (m, i) => new File([await (await fetch('./demo/' + m.file)).blob()], m.file, { type: 'image/jpeg', lastModified: 1_700_000_000_000 + i * 3_600_000 })))
+    setAutoGen(true)
+    await ingest({ files }, { demo: true })
+  }
+  function exitDemo() {
+    photos.forEach(p => p.thumb.close())
+    if (pages !== NO_PAGES || excluded !== NO_EXCLUDED) hist.current.mode = 'reset'
+    setPhotos([]); setPages(NO_PAGES); setExcluded(NO_EXCLUDED); setDemo(false); setProject(''); setMsg(''); setSel(null); setStripSel(null); setMulti([]); setWelcome(true)
+  }
+  function newProject(name: string) {
+    pendingName.current = name.trim(); setWelcome(false)
+    if (name.trim()) setProject(name.trim())
+    run(choose)
   }
   async function resumeSession() {
     if ((await resume.requestPermission({ mode: 'readwrite' })) !== 'granted') return
@@ -118,7 +144,7 @@ export default function App() {
   }
   // sauvegarde auto (debounce) : réglages, exclusions, collages
   useEffect(() => {
-    if (!photos.length) return
+    if (!photos.length || demo) return
     setSave(v => ({ ...v, st: 'saving' }))
     const t = setTimeout(async () => {
       const ok = await kvSet('state', { project, settings: s, excluded: [...excluded], pages })
@@ -127,7 +153,9 @@ export default function App() {
       setSave({ st: ok ? 'saved' : 'error', at: Date.now() })
     }, 400)
     return () => clearTimeout(t)
-  }, [project, s, excluded, pages, photos.length, hist.current.idx, hist.current.tl.length])
+  }, [demo, project, s, excluded, pages, photos.length, hist.current.idx, hist.current.tl.length])
+  // démo : génération automatique dès que les photos sont chargées
+  useEffect(() => { if (autoGen && photos.length && !busy) { setAutoGen(false); run(generate) } }, [autoGen, photos, busy])
   useEffect(() => { document.title = project.trim() || 'Collage' }, [project])
   async function choose() {
     try { const f = await pickDirectory(); if (f) return ingest(f) } catch { return } // annulé
@@ -514,8 +542,9 @@ export default function App() {
         <input ref={folderInput} type="file" multiple hidden accept="image/*" {...{ webkitdirectory: '' }} onChange={e => { const f = [...(e.target.files ?? [])]; e.target.value = ''; run(() => (syncRef.current ? ((syncRef.current = false), doSync(f)) : ingest({ files: f }))) }} />
         <label className="btn">Fichiers…<input type="file" multiple hidden accept="image/*" onChange={e => run(() => ingest({ files: [...(e.target.files ?? [])] }))} /></label>
         {resume && !photos.length && <button onClick={() => run(resumeSession)}>Reprendre : {resume.name}</button>}
-        {photos.length > 0 && <button title="Resynchronise avec le dossier : les nouvelles photos sont ajoutées à la pellicule, inactives" onClick={() => run(syncFolder)}>⟳ Sync</button>}
-        {(resume || photos.length > 0) && <button title="Oublier le dossier, les miniatures et les collages sauvegardés" onClick={() => { kvClear(); setResume(null); setMsg('Session oubliée') }}>Oublier</button>}
+        {!photos.length && !welcome && <button title="Démo, nouveau projet ou reprise" onClick={() => setWelcome(true)}>Accueil</button>}
+        {photos.length > 0 && !demo && <button title="Resynchronise avec le dossier : les nouvelles photos sont ajoutées à la pellicule, inactives" onClick={() => run(syncFolder)}>⟳ Sync</button>}
+        {!demo && (resume || photos.length > 0) && <button title="Oublier le dossier, les miniatures et les collages sauvegardés" onClick={() => { kvClear(); setResume(null); setMsg('Session oubliée') }}>Oublier</button>}
         {photos.length > 0 && (() => {
           const { tl, idx } = hist.current
           return <>
@@ -529,6 +558,7 @@ export default function App() {
           </>
         })()}
         <span className="spacer" />
+        {demo && <span className="chip demo" title="Les photos viennent de la démo ; rien n’est écrit dans votre navigateur">🎞 Mode démo · rien n’est sauvegardé <button onClick={exitDemo}>Quitter</button></span>}
         {!photos.length && !msg && <span className="muted">Glissez un dossier ici — rien n’est envoyé sur un serveur</span>}
         {(sel || stripSel || multi.length > 0) && (() => {
           const many = !sel && multi.length > 0
@@ -537,7 +567,7 @@ export default function App() {
           return <span className="chip" title={`Sélection : ${name} (${where})`}>📍 <b>{name}</b> <i>{where}</i>
             <button onClick={() => { setSel(null); setStripSel(null); setMulti([]) }}>✕ Échap</button></span>
         })()}
-        {save.st !== 'idle' && (
+        {!demo && save.st !== 'idle' && (
           <span className={'save ' + save.st} title="La session (collages, réglages, exclusions) est enregistrée automatiquement dans ce navigateur">
             {save.st === 'saving' ? '● Enregistrement…' : save.st === 'saved' ? `✓ ${new Date(save.at!).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : '⚠ Sauvegarde impossible'}
           </span>
@@ -587,6 +617,8 @@ export default function App() {
         <span className="muted fmt">{fmt.pxW}×{fmt.pxH} px</span>
       </section>}
       </div>
+
+      {welcome && !photos.length && <Welcome resumeName={resume?.name} onDemo={() => run(loadDemo)} onNew={newProject} onResume={() => { setWelcome(false); run(resumeSession) }} onClose={() => setWelcome(false)} />}
 
       {msg && <div className="toast" onClick={() => setMsg('')}>{msg} <button>✕</button></div>}
 
