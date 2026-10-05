@@ -84,6 +84,16 @@ Toutes les photos avec leur statut : **utilisée** (vert, badge `C3` = collage 3
 
 Tout est **sauvegardé automatiquement** dans le navigateur (IndexedDB) : collages, épingles, noms, exclusions, réglages, nom du projet et **historique** (60 dernières actions, annuler / rétablir et liste cliquable). Un indicateur `✓ hh:mm:ss` confirme l'enregistrement. Au retour : **Reprendre** (Chrome / Edge, avec permission d'accès au dossier) ou rechoisir le même dossier, la session se restaure par correspondance des fichiers (nom + taille + date). Les miniatures sont mises en cache. Les réglages et le nom du projet sont sauvegardés mais ne sont pas dans l'historique.
 
+## Déploiement (GitHub Pages)
+
+L'application est un **site statique** (aucun serveur) : le dossier `dist/` suffit. Le workflow [`.github/workflows/pages.yml`](.github/workflows/pages.yml) lance les tests, construit le site et le publie à chaque push sur `main`.
+
+1. Pousser le dépôt sur GitHub.
+2. *Settings → Pages → Build and deployment → Source : **GitHub Actions***.
+3. Le site est disponible sur `https://<utilisateur>.github.io/<dépôt>/`.
+
+Les chemins sont relatifs (`base: './'`) : cela fonctionne quel que soit le nom du dépôt ou le sous-dossier. GitHub Pages sert en HTTPS, ce qui est nécessaire à la File System Access API, aux Web Workers et à IndexedDB. Pour tester le build en local : `npm run build && npm run preview`.
+
 ## Compatibilité borne photo
 
 JPEG baseline, RGB 4:2:0, profil sRGB, sans EXIF, qualité 0,95, 1800×1200 px exactement, densité JFIF renseignée (305 DPI pour 150×100 mm). Noms simples (`collage-001.jpg`) : évitez accents et espaces dans les titres si votre borne est stricte. Gardez au moins 3 mm de marge (certaines bornes recadrent légèrement) et laissez « Traits de coupe » décoché pour imprimer. Le PNG est fourni mais le JPEG est recommandé.
