@@ -4,6 +4,27 @@ Application web **100 % locale** qui compose automatiquement des centaines de ph
 
 > Dossier de 200 photos → quelques réglages → **Générer** → je vérifie vite → **Exporter** → je mets les JPEG sur la borne.
 
+## Aperçu
+
+![Vue d'ensemble : grille de collages et pellicule](docs/screenshots/overview.png)
+
+<table>
+<tr>
+<td width="50%"><b>Un collage</b> — partition récursive, tailles différentes, crop minimal<br><img src="docs/screenshots/collage-zoom.png" alt="Zoom sur un collage"></td>
+<td width="50%"><b>Photo sélectionnée</b> — épingle 📌, recadrage, ratio, enlever, échanger<br><img src="docs/screenshots/selection-zoom.png" alt="Photo sélectionnée avec ses actions"></td>
+</tr>
+</table>
+
+**Pellicule** — statut de chaque photo, filtres, sélection multiple (⌘/Maj-clic) à glisser sur un collage :
+
+![Pellicule avec sélection multiple](docs/screenshots/filmstrip-zoom.png)
+
+**Barre d'outils** — réglages repliables, historique, sauvegarde automatique :
+
+![Barre d'outils et réglages](docs/screenshots/toolbar-settings.png)
+
+> Captures réalisées avec 46 photos de test [Unsplash](https://unsplash.com/license) (voir [`test-photos/CREDITS.md`](test-photos/CREDITS.md)). Pour les retélécharger : `scripts/fetch-test-photos.sh`.
+
 ## Démarrage
 
 ```bash
