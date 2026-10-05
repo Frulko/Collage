@@ -4,6 +4,8 @@ Application web **100 % locale** qui compose automatiquement des centaines de ph
 
 > Dossier de 200 photos → quelques réglages → **Générer** → je vérifie vite → **Exporter** → je mets les JPEG sur la borne.
 
+**▶ [Essayer la démo en ligne](https://frulko.github.io/Collage/)** — au lancement, une modale propose de charger 30 photos Unsplash (collages générés automatiquement) ou de démarrer un nouveau projet.
+
 ## Aperçu
 
 ![Vue d'ensemble : grille de collages et pellicule](docs/screenshots/overview.png)
@@ -37,6 +39,10 @@ npm run build    # vérification TypeScript + build de production
 Navigateur recommandé : **Chrome / Edge** (File System Access API : dossier mémorisé, reprise en un clic, export dans un dossier). Firefox et Safari fonctionnent via les sélecteurs de fichiers classiques (il faut alors rechoisir le dossier à chaque session).
 
 ## Utilisation
+
+Au lancement, une **modale d'accueil** propose : **Charger la démo** (30 photos Unsplash embarquées dans le site, collages générés automatiquement, *rien n'est sauvegardé* et votre vraie session n'est jamais touchée), **Nouveau projet** (nom facultatif puis choix d'un dossier) ou **Reprendre** la dernière session. Le bouton *Accueil* la rouvre ; *Quitter* (pastille « Mode démo ») revient à l'accueil.
+
+![Modale d'accueil](docs/screenshots/welcome.png)
 
 1. **Choisir un dossier** (ou glisser-déposer un dossier / des fichiers). L'orientation EXIF est appliquée, la date de prise de vue sert à l'ordre chronologique.
 2. Régler le format, les marges, le nombre de photos par collage… puis **Générer**.
